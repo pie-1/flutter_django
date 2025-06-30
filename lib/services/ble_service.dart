@@ -1,22 +1,48 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+
+class BluetoothDevice {
+  final String id;
+  final String name;
+  final int rssi;
+  final bool isConnectable;
+  final DateTime lastSeen;
+
+  BluetoothDevice({
+    required this.id,
+    required this.name,
+    required this.rssi,
+    this.isConnectable = true,
+    DateTime? lastSeen,
+  }) : lastSeen = lastSeen ?? DateTime.now();
+
+  String get displayName => name.isNotEmpty ? name : 'Unknown Device';
+  
+  String get signalStrength {
+    if (rssi > -50) return 'Excellent';
+    if (rssi > -70) return 'Good';
+    if (rssi > -85) return 'Fair';
+    return 'Poor';
+  }
+
+  IconData get signalIcon {
+    if (rssi > -50) return Icons.signal_cellular_4_bar;
+    if (rssi > -70) return Icons.signal_cellular_3_bar;
+    if (rssi > -85) return Icons.signal_cellular_2_bar;
+    return Icons.signal_cellular_1_bar;
+  }
+}
 
 class BLEService {
   static final BLEService _instance = BLEService._internal();
   factory BLEService() => _instance;
   BLEService._internal();
 
-  // Service and Characteristic UUIDs for payment transactions
-  static const String serviceUuid = "12345678-1234-1234-1234-123456789abc";
-  static const String characteristicUuid = "87654321-4321-4321-4321-cba987654321";
-
   BluetoothDevice? _connectedDevice;
-  BluetoothCharacteristic? _characteristic;
-  StreamSubscription? _scanSubscription;
-  StreamSubscription? _characteristicSubscription;
+  bool _isScanning = false;
+  bool _isConnected = false;
 
   final StreamController<List<BluetoothDevice>> _devicesController = 
       StreamController<List<BluetoothDevice>>.broadcast();
@@ -27,19 +53,35 @@ class BLEService {
 
   List<BluetoothDevice> _discoveredDevices = [];
 
+  // Mock device database for realistic simulation
+  final List<Map<String, String>> _mockDevices = [
+    {'id': '00:11:22:33:44:55', 'name': 'OffPay Demo Device'},
+    {'id': '11:22:33:44:55:66', 'name': 'Redmi Note 12'},
+    {'id': '22:33:44:55:66:77', 'name': 'iPhone 14 Pro'},
+    {'id': '33:44:55:66:77:88', 'name': 'Samsung Galaxy S23'},
+    {'id': '44:55:66:77:88:99', 'name': 'OnePlus 11'},
+    {'id': '55:66:77:88:99:AA', 'name': 'Pixel 7 Pro'},
+    {'id': '66:77:88:99:AA:BB', 'name': 'Xiaomi 13'},
+    {'id': '77:88:99:AA:BB:CC', 'name': 'Vivo V27'},
+    {'id': '88:99:AA:BB:CC:DD', 'name': 'Oppo Find X5'},
+    {'id': '99:AA:BB:CC:DD:EE', 'name': 'Realme GT 3'},
+  ];
+
   // Getters for streams
   Stream<List<BluetoothDevice>> get devicesStream => _devicesController.stream;
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
   Stream<String> get connectionStatusStream => _connectionStatusController.stream;
 
+  bool get isScanning => _isScanning;
+  bool get isConnected => _isConnected;
+  BluetoothDevice? get connectedDevice => _connectedDevice;
+
   // Check if Bluetooth is available and enabled
   Future<bool> isBluetoothAvailable() async {
     try {
-      final isSupported = await FlutterBluePlus.isSupported;
-      if (!isSupported) return false;
-      
-      final adapterState = await FlutterBluePlus.adapterState.first;
-      return adapterState == BluetoothAdapterState.on;
+      // Simulate Bluetooth availability check
+      await Future.delayed(const Duration(milliseconds: 500));
+      return true;
     } catch (e) {
       debugPrint('Error checking Bluetooth availability: $e');
       return false;
@@ -48,28 +90,47 @@ class BLEService {
 
   // Start scanning for nearby devices
   Future<void> startScan({Duration timeout = const Duration(seconds: 10)}) async {
+    if (_isScanning) return;
+
     try {
+      _isScanning = true;
       _discoveredDevices.clear();
       _devicesController.add(_discoveredDevices);
-
-      // Stop any existing scan
-      await FlutterBluePlus.stopScan();
-
-      // Start scanning
-      await FlutterBluePlus.startScan(timeout: timeout);
-
-      // Listen for scan results
-      _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
-        for (var result in results) {
-          if (!_discoveredDevices.any((device) => device.id == result.device.id)) {
-            _discoveredDevices.add(result.device);
-            _devicesController.add(List.from(_discoveredDevices));
-          }
-        }
-      });
-
       _connectionStatusController.add('Scanning for devices...');
+
+      // Simulate progressive device discovery
+      final random = Random();
+      final shuffledDevices = List.from(_mockDevices)..shuffle();
+      
+      for (int i = 0; i < shuffledDevices.length; i++) {
+        if (!_isScanning) break;
+        
+        await Future.delayed(Duration(milliseconds: 300 + random.nextInt(700)));
+        
+        final deviceData = shuffledDevices[i];
+        final device = BluetoothDevice(
+          id: deviceData['id']!,
+          name: deviceData['name']!,
+          rssi: -30 - random.nextInt(60), // Random signal strength
+          isConnectable: random.nextBool() || deviceData['name']!.contains('OffPay'),
+        );
+
+        _discoveredDevices.add(device);
+        _devicesController.add(List.from(_discoveredDevices));
+
+        // Stop after finding 5-7 devices for realistic experience
+        if (i >= 4 + random.nextInt(3)) break;
+      }
+
+      await Future.delayed(const Duration(milliseconds: 500));
+      _isScanning = false;
+      _connectionStatusController.add(
+        _discoveredDevices.isEmpty 
+          ? 'No devices found' 
+          : 'Found ${_discoveredDevices.length} device(s)'
+      );
     } catch (e) {
+      _isScanning = false;
       debugPrint('Error starting scan: $e');
       _connectionStatusController.add('Error: Failed to start scanning');
     }
@@ -77,48 +138,32 @@ class BLEService {
 
   // Stop scanning
   Future<void> stopScan() async {
-    try {
-      await FlutterBluePlus.stopScan();
-      await _scanSubscription?.cancel();
-      _connectionStatusController.add('Scan stopped');
-    } catch (e) {
-      debugPrint('Error stopping scan: $e');
-    }
+    _isScanning = false;
+    _connectionStatusController.add('Scan stopped');
   }
 
   // Connect to a specific device
   Future<bool> connectToDevice(BluetoothDevice device) async {
     try {
-      _connectionStatusController.add('Connecting to ${device.name}...');
+      _connectionStatusController.add('Connecting to ${device.displayName}...');
       
-      await device.connect(timeout: const Duration(seconds: 15));
-      _connectedDevice = device;
-
-      // Discover services
-      final services = await device.discoverServices();
+      // Simulate connection process
+      await Future.delayed(const Duration(seconds: 2));
       
-      // Find our payment service and characteristic
-      for (var service in services) {
-        for (var characteristic in service.characteristics) {
-          if (characteristic.properties.write || characteristic.properties.read) {
-            _characteristic = characteristic;
-            
-            // Enable notifications if supported
-            if (characteristic.properties.notify) {
-              await characteristic.setNotifyValue(true);
-              _characteristicSubscription = characteristic.value.listen(_onDataReceived);
-            }
-            break;
-          }
-        }
-        if (_characteristic != null) break;
+      // Simulate occasional connection failures for realism
+      final random = Random();
+      if (random.nextInt(10) < 2 && !device.name.contains('OffPay')) {
+        _connectionStatusController.add('Failed to connect to ${device.displayName}');
+        return false;
       }
 
-      _connectionStatusController.add('Connected to ${device.name}');
+      _connectedDevice = device;
+      _isConnected = true;
+      _connectionStatusController.add('Connected to ${device.displayName}');
       return true;
     } catch (e) {
       debugPrint('Error connecting to device: $e');
-      _connectionStatusController.add('Failed to connect to ${device.name}');
+      _connectionStatusController.add('Failed to connect to ${device.displayName}');
       return false;
     }
   }
@@ -126,10 +171,13 @@ class BLEService {
   // Disconnect from current device
   Future<void> disconnect() async {
     try {
-      await _characteristicSubscription?.cancel();
-      await _connectedDevice?.disconnect();
+      if (_connectedDevice != null) {
+        _connectionStatusController.add('Disconnecting from ${_connectedDevice!.displayName}...');
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      
       _connectedDevice = null;
-      _characteristic = null;
+      _isConnected = false;
       _connectionStatusController.add('Disconnected');
     } catch (e) {
       debugPrint('Error disconnecting: $e');
@@ -145,7 +193,7 @@ class BLEService {
     required double amount,
     String? description,
   }) async {
-    if (_characteristic == null) {
+    if (!_isConnected || _connectedDevice == null) {
       _connectionStatusController.add('Error: Not connected to any device');
       return false;
     }
@@ -163,13 +211,21 @@ class BLEService {
         'transaction_id': _generateTransactionId(),
       };
 
-      final jsonData = jsonEncode(paymentData);
-      final bytes = utf8.encode(jsonData);
+      _connectionStatusController.add('Sending payment request...');
       
-      // Split data into chunks if too large (BLE has MTU limitations)
-      await _sendDataInChunks(bytes);
+      // Simulate sending data
+      await Future.delayed(const Duration(seconds: 1));
       
-      _connectionStatusController.add('Payment request sent');
+      // Simulate automatic acceptance for demo
+      await Future.delayed(const Duration(milliseconds: 500));
+      _messageController.add({
+        'type': 'payment_response',
+        'transaction_id': paymentData['transaction_id'],
+        'accepted': true,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+      
+      _connectionStatusController.add('Payment request sent successfully');
       return true;
     } catch (e) {
       debugPrint('Error sending payment request: $e');
@@ -184,7 +240,7 @@ class BLEService {
     required bool accepted,
     String? reason,
   }) async {
-    if (_characteristic == null) {
+    if (!_isConnected || _connectedDevice == null) {
       _connectionStatusController.add('Error: Not connected to any device');
       return false;
     }
@@ -198,10 +254,7 @@ class BLEService {
         'timestamp': DateTime.now().toIso8601String(),
       };
 
-      final jsonData = jsonEncode(responseData);
-      final bytes = utf8.encode(jsonData);
-      
-      await _sendDataInChunks(bytes);
+      await Future.delayed(const Duration(milliseconds: 500));
       
       _connectionStatusController.add('Payment response sent');
       return true;
@@ -212,64 +265,37 @@ class BLEService {
     }
   }
 
-  // Send data in chunks to handle MTU limitations
-  Future<void> _sendDataInChunks(List<int> data) async {
-    const int chunkSize = 20; // Conservative chunk size for BLE
-    
-    for (int i = 0; i < data.length; i += chunkSize) {
-      final end = (i + chunkSize < data.length) ? i + chunkSize : data.length;
-      final chunk = data.sublist(i, end);
-      
-      await _characteristic!.write(Uint8List.fromList(chunk), withoutResponse: false);
-      
-      // Small delay between chunks
-      await Future.delayed(const Duration(milliseconds: 50));
-    }
-  }
-
-  // Handle received data
-  void _onDataReceived(List<int> data) {
-    try {
-      final message = utf8.decode(data);
-      final Map<String, dynamic> parsedMessage = jsonDecode(message);
-      
-      _messageController.add(parsedMessage);
-      
-      // Log received message type
-      final messageType = parsedMessage['type'] ?? 'unknown';
-      _connectionStatusController.add('Received: $messageType');
-    } catch (e) {
-      debugPrint('Error parsing received data: $e');
-    }
-  }
-
   // Generate unique transaction ID
   String _generateTransactionId() {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final random = (timestamp % 10000).toString().padLeft(4, '0');
+    final random = Random().nextInt(10000).toString().padLeft(4, '0');
     return 'TXN_${timestamp}_$random';
   }
 
-  // Get connection status
-  bool get isConnected => _connectedDevice != null;
-  
-  String get connectedDeviceName => _connectedDevice?.name ?? 'Unknown Device';
+  // Simulate receiving a payment request (for receiver mode)
+  void simulateIncomingPaymentRequest({
+    required String senderName,
+    required String senderPhone,
+    required double amount,
+    String? description,
+  }) {
+    final paymentData = {
+      'type': 'payment_request',
+      'sender_name': senderName,
+      'sender_phone': senderPhone,
+      'amount': amount,
+      'description': description ?? '',
+      'timestamp': DateTime.now().toIso8601String(),
+      'transaction_id': _generateTransactionId(),
+    };
 
-  // Simulate connection for demo purposes
-  void simulateConnection(String deviceName) {
-    _connectedDevice = BluetoothDevice(
-      remoteId: DeviceIdentifier('00:11:22:33:44:55'),
-    );
-    _connectionStatusController.add('Connected to $deviceName (Demo)');
+    _messageController.add(paymentData);
   }
 
   // Dispose resources
   void dispose() {
-    _scanSubscription?.cancel();
-    _characteristicSubscription?.cancel();
     _devicesController.close();
     _messageController.close();
     _connectionStatusController.close();
   }
 }
-

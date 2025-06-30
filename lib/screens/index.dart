@@ -1,4 +1,3 @@
-// 🔹 screens/index.dart
 import 'package:flutter/material.dart';
 import 'qr_generate_screen.dart';
 import 'qr_scan_screen.dart';
@@ -14,150 +13,354 @@ class IndexScreen extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: const Text('OFFluuter Pay', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 16.0),
-        child: Column(
-          children: [
-            const SizedBox(height: 24),
-            // Logo/Icon
-            CircleAvatar(
-              radius: 44,
-              backgroundColor: colorScheme.primary.withOpacity(0.08),
-              child: Icon(Icons.offline_bolt, size: 48, color: colorScheme.primary),
+      body: CustomScrollView(
+        slivers: [
+          // App Bar
+          SliverAppBar(
+            expandedHeight: 120,
+            floating: false,
+            pinned: true,
+            elevation: 0,
+            backgroundColor: colorScheme.surface,
+            flexibleSpace: FlexibleSpaceBar(
+              title: const Text(
+                'OffPay',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              centerTitle: true,
+              background: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      colorScheme.primary.withOpacity(0.1),
+                      colorScheme.surface,
+                    ],
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: 18),
-            const Text(
-              'Welcome to OFFluuter Pay',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, letterSpacing: 0.5),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Send and receive payments instantly,\neven without internet.',
-              style: TextStyle(fontSize: 15, color: Colors.grey[400]),
-              textAlign: TextAlign.center,
-            ),
-            const Spacer(),
-            // Buttons
-            Column(
-              children: [
+          ),
+
+          // Content
+          SliverPadding(
+            padding: const EdgeInsets.all(20.0),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                // Welcome Section
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        colorScheme.primary,
+                        colorScheme.primary.withOpacity(0.8),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: colorScheme.primary.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.offline_bolt,
+                        size: 48,
+                        color: colorScheme.onPrimary,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Welcome to OffPay',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onPrimary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Send and receive payments instantly,\neven without internet connection.',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: colorScheme.onPrimary.withOpacity(0.9),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
                 // QR Code Section
-                Text(
-                  'QR Code Payments',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onSurface.withOpacity(0.8),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.qr_code),
-                  label: const Text('Receive (Generate QR)'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    backgroundColor: colorScheme.secondary,
-                    foregroundColor: colorScheme.onSecondary,
-                    textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const QRGenerateScreen()),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text('Send (Scan QR)'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    backgroundColor: colorScheme.primary,
-                    foregroundColor: colorScheme.onPrimary,
-                    textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const QRScanScreen()),
-                  ),
-                ),
+                _buildSectionHeader('QR Code Payments', Icons.qr_code, colorScheme),
+                const SizedBox(height: 16),
                 
-                const SizedBox(height: 24),
-                
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildActionCard(
+                        title: 'Receive',
+                        subtitle: 'Generate QR',
+                        icon: Icons.qr_code_2,
+                        color: colorScheme.secondary,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const QRGenerateScreen()),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildActionCard(
+                        title: 'Send',
+                        subtitle: 'Scan QR',
+                        icon: Icons.camera_alt,
+                        color: colorScheme.primary,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const QRScanScreen()),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 32),
+
                 // Bluetooth Section
-                Text(
-                  'Bluetooth Payments',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onSurface.withOpacity(0.8),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.bluetooth),
-                  label: const Text('Receive via Bluetooth'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    backgroundColor: colorScheme.tertiary,
-                    foregroundColor: colorScheme.onTertiary,
-                    textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ReceiverBluetoothServerScreen()),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.bluetooth_searching),
-                  label: const Text('Send via Bluetooth'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    backgroundColor: colorScheme.primaryContainer,
-                    foregroundColor: colorScheme.onPrimaryContainer,
-                    textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => _showBluetoothPaymentDialog(context),
-                ),
+                _buildSectionHeader('Bluetooth Payments', Icons.bluetooth, colorScheme),
+                const SizedBox(height: 16),
                 
-                const SizedBox(height: 24),
-                
-                // Transaction History
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.history),
-                  label: const Text('Transaction History'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    foregroundColor: colorScheme.primary,
-                    textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
-                    side: BorderSide(color: colorScheme.primary, width: 1.2),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => Navigator.push(
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildActionCard(
+                        title: 'Receive',
+                        subtitle: 'Via Bluetooth',
+                        icon: Icons.bluetooth_searching,
+                        color: colorScheme.tertiary,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ReceiverBluetoothServerScreen()),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildActionCard(
+                        title: 'Send',
+                        subtitle: 'Via Bluetooth',
+                        icon: Icons.bluetooth_connected,
+                        color: colorScheme.primaryContainer,
+                        onTap: () => _showBluetoothPaymentDialog(context),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 32),
+
+                // Additional Actions
+                _buildSectionHeader('Account', Icons.account_circle, colorScheme),
+                const SizedBox(height: 16),
+
+                _buildListTile(
+                  title: 'Transaction History',
+                  subtitle: 'View all your offline transactions',
+                  icon: Icons.history,
+                  onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const TransactionsHistoryScreen()),
                   ),
+                  colorScheme: colorScheme,
                 ),
+
+                const SizedBox(height: 12),
+
+                _buildListTile(
+                  title: 'Settings',
+                  subtitle: 'App preferences and configuration',
+                  icon: Icons.settings,
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Settings coming soon!'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  colorScheme: colorScheme,
+                ),
+
+                const SizedBox(height: 32),
+
+                // Footer
+                Center(
+                  child: Column(
+                    children: [
+                      Text(
+                        'Made with Flutter • Offline Ready',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: colorScheme.onSurface.withOpacity(0.6),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Version 1.0.0',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurface.withOpacity(0.4),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+              ]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon, ColorScheme colorScheme) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          color: colorScheme.primary,
+          size: 20,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: colorScheme.onSurface,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                color,
+                color.withOpacity(0.8),
               ],
             ),
-            const Spacer(),
-            Text(
-              'Made with Flutter • Offline Ready',
-              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-          ],
+          ),
+          child: Column(
+            children: [
+              Icon(
+                icon,
+                size: 32,
+                color: Colors.white,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withOpacity(0.9),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildListTile({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required VoidCallback onTap,
+    required ColorScheme colorScheme,
+  }) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        onTap: onTap,
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: colorScheme.primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            icon,
+            color: colorScheme.primary,
+            size: 24,
+          ),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: colorScheme.onSurface.withOpacity(0.6),
+            fontSize: 14,
+          ),
+        ),
+        trailing: Icon(
+          Icons.arrow_forward_ios,
+          size: 16,
+          color: colorScheme.onSurface.withOpacity(0.4),
         ),
       ),
     );
@@ -172,11 +375,27 @@ class IndexScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            Icon(Icons.bluetooth, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 8),
-            const Text('Send Payment via Bluetooth'),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.bluetooth,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Send Payment via Bluetooth',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
           ],
         ),
         content: SingleChildScrollView(
@@ -185,35 +404,47 @@ class IndexScreen extends StatelessWidget {
             children: [
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Receiver Name',
-                  border: OutlineInputBorder(),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.person),
                 ),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: phoneController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Receiver Phone',
-                  border: OutlineInputBorder(),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.phone),
                 ),
                 keyboardType: TextInputType.phone,
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: amountController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Amount (₹)',
-                  border: OutlineInputBorder(),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.currency_rupee),
                 ),
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: descriptionController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Description (Optional)',
-                  border: OutlineInputBorder(),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.note),
                 ),
                 maxLines: 2,
               ),
@@ -237,6 +468,7 @@ class IndexScreen extends StatelessWidget {
                   const SnackBar(
                     content: Text('Please fill in all required fields'),
                     backgroundColor: Colors.red,
+                    behavior: SnackBarBehavior.floating,
                   ),
                 );
                 return;
@@ -248,6 +480,7 @@ class IndexScreen extends StatelessWidget {
                   const SnackBar(
                     content: Text('Please enter a valid amount'),
                     backgroundColor: Colors.red,
+                    behavior: SnackBarBehavior.floating,
                   ),
                 );
                 return;
@@ -266,6 +499,9 @@ class IndexScreen extends StatelessWidget {
                 ),
               );
             },
+            style: ElevatedButton.styleFrom(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             child: const Text('Continue'),
           ),
         ],

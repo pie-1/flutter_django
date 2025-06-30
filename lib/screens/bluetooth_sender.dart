@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../services/ble_service.dart';
 import '../services/transactions_queue.dart';
 import 'payment_confirmation_page.dart';
@@ -23,28 +22,15 @@ class BluetoothSenderScreen extends StatefulWidget {
   State<BluetoothSenderScreen> createState() => _BluetoothSenderScreenState();
 }
 
-class _BluetoothSenderScreenState extends State<BluetoothSenderScreen> with SingleTickerProviderStateMixin {
+class _BluetoothSenderScreenState extends State<BluetoothSenderScreen> 
+    with SingleTickerProviderStateMixin {
   final BLEService _bleService = BLEService();
   List<BluetoothDevice> _discoveredDevices = [];
   BluetoothDevice? _selectedDevice;
-  String _connectionStatus = 'Initializing...';
-  bool _isScanning = false;
-  bool _isConnecting = false;
+  String _connectionStatus = 'Ready to scan';
   bool _isWaitingResponse = false;
-  bool _isPaired = false;
-  AnimationController? _animationController;
-
-  // Default demo device for hackathon
-  final String _defaultDeviceName = 'OffPay Demo Device';
-  final String _defaultDeviceId = '00:11:22:33:44:55';
-
-  // Mock device names for web
-  final Map<String, String> _mockDeviceNames = {
-    '00:11:22:33:44:55': 'OffPay Demo Device',
-    '11:22:33:44:55:66': 'Redmi Note 12',
-    '22:33:44:55:66:77': 'AirBud Pro',
-    '33:44:55:66:77:88': 'Samsung Galaxy S23',
-  };
+  late AnimationController _animationController;
+  late Animation<double> _pulseAnimation;
 
   StreamSubscription? _devicesSubscription;
   StreamSubscription? _messageSubscription;
@@ -56,13 +42,16 @@ class _BluetoothSenderScreenState extends State<BluetoothSenderScreen> with Sing
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
-    )..repeat();
+    );
+    _pulseAnimation = Tween<double>(begin: 0.8, end: 1.2).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
     _initializeBluetooth();
   }
 
   @override
   void dispose() {
-    _animationController?.dispose();
+    _animationController.dispose();
     _devicesSubscription?.cancel();
     _messageSubscription?.cancel();
     _statusSubscription?.cancel();
@@ -72,34 +61,37 @@ class _BluetoothSenderScreenState extends State<BluetoothSenderScreen> with Sing
   }
 
   Future<void> _initializeBluetooth() async {
-    // Web doesn't support full Bluetooth, so simulate device discovery
-    setState(() {
-      _connectionStatus = 'Simulating Bluetooth for web...';
+    final isAvailable = await _bleService.isBluetoothAvailable();
+    if (!isAvailable) {
+      setState(() {
+        _connectionStatus = 'Bluetooth not available. Please enable Bluetooth.';
+      });
+      return;
+    }
+
+    _statusSubscription = _bleService.connectionStatusStream.listen((status) {
+      if (mounted) {
+        setState(() {
+          _connectionStatus = status;
+        });
+      }
     });
 
-    // Simulate discovered devices for web
-    _devicesSubscription = Stream.value([
-      BluetoothDevice(remoteId: DeviceIdentifier('00:11:22:33:44:55')),
-      BluetoothDevice(remoteId: DeviceIdentifier('11:22:33:44:55:66')),
-      BluetoothDevice(remoteId: DeviceIdentifier('22:33:44:55:66:77')),
-      BluetoothDevice(remoteId: DeviceIdentifier('33:44:55:66:77:88')),
-    ]).listen((devices) {
-      setState(() {
-        _discoveredDevices = devices;
-      });
-    });
-
-    _statusSubscription = Stream.value('Ready to pair').listen((status) {
-      setState(() {
-        _connectionStatus = status;
-      });
+    _devicesSubscription = _bleService.devicesStream.listen((devices) {
+      if (mounted) {
+        setState(() {
+          _discoveredDevices = devices;
+        });
+      }
     });
 
     _messageSubscription = _bleService.messageStream.listen((message) {
       _handleIncomingMessage(message);
     });
 
-    _startScan();
+    setState(() {
+      _connectionStatus = 'Ready to scan for devices';
+    });
   }
 
   void _handleIncomingMessage(Map<String, dynamic> message) {
@@ -132,112 +124,20 @@ class _BluetoothSenderScreenState extends State<BluetoothSenderScreen> with Sing
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Payment sent successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    }
-  }
-
-  void _onPaymentRejected(Map<String, dynamic> response) {
-    if (mounted) {
-      final reason = response['reason'] ?? 'Payment was rejected by the receiver';
-      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(reason),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  Future<void> _startScan() async {
-    setState(() {
-      _isScanning = true;
-      _discoveredDevices.clear();
-      _selectedDevice = null;
-      _isPaired = false;
-      _connectionStatus = 'Scanning for devices...';
-    });
-
-    // Simulate scan for web
-    await Future.delayed(const Duration(seconds: 2));
-    setState(() {
-      _isScanning = false;
-      _connectionStatus = _discoveredDevices.isEmpty ? 'No devices found' : 'Select a device to pair';
-    });
-  }
-
-  Future<void> _connectToDevice(BluetoothDevice device) async {
-    setState(() {
-      _isConnecting = true;
-      _selectedDevice = device;
-      _isPaired = false;
-      _connectionStatus = 'Pairing with ${_getDeviceName(device)}...';
-    });
-
-    // Simulate pairing for web
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() {
-      _isConnecting = false;
-      _isPaired = true;
-      _connectionStatus = 'Paired with ${_getDeviceName(device)}';
-    });
-
-    // Simulate payment transfer
-    _bleService.simulateConnection(_getDeviceName(device));
-    await _bleService.sendPaymentRequest(
-      senderName: 'Current User',
-      senderPhone: '+1234567890',
-      receiverName: widget.receiverName,
-      receiverPhone: widget.receiverPhone,
-      amount: widget.amount,
-      description: widget.description,
-    );
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Payment of ₹${widget.amount.toStringAsFixed(2)} sent to ${_getDeviceName(device)}'),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 8),
+              Text('Payment of ₹${widget.amount.toStringAsFixed(2)} sent successfully!'),
+            ],
+          ),
           backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
         ),
       );
-    }
-  }
 
-  String _getDeviceName(BluetoothDevice device) {
-    return _mockDeviceNames[device.remoteId.toString()] ?? 'Unknown Device';
-  }
-
-  Future<void> _verifyAndProceed() async {
-    if (!_isPaired || _selectedDevice == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No device paired. Please pair a device first.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isWaitingResponse = true;
-      _connectionStatus = 'Verifying payment...';
-    });
-
-    // Simulate verification for web
-    await Future.delayed(const Duration(seconds: 1));
-    await _onPaymentAccepted({
-      'transaction_id': 'WEB_${DateTime.now().millisecondsSinceEpoch}',
-      'accepted': true,
-    });
-
-    if (mounted) {
-      setState(() {
-        _isWaitingResponse = false;
-      });
-      Navigator.of(context).push(
+      Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (context) => PaymentConfirmationPage(
             receiverName: widget.receiverName,
@@ -250,183 +150,218 @@ class _BluetoothSenderScreenState extends State<BluetoothSenderScreen> with Sing
     }
   }
 
+  void _onPaymentRejected(Map<String, dynamic> response) {
+    if (mounted) {
+      final reason = response['reason'] ?? 'Payment was rejected by the receiver';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(reason)),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _startScan() async {
+    _animationController.repeat();
+    await _bleService.startScan();
+    _animationController.stop();
+  }
+
+  Future<void> _connectToDevice(BluetoothDevice device) async {
+    final success = await _bleService.connectToDevice(device);
+    if (success && mounted) {
+      setState(() {
+        _selectedDevice = device;
+      });
+    }
+  }
+
+  Future<void> _sendPayment() async {
+    if (_selectedDevice == null) return;
+
+    setState(() {
+      _isWaitingResponse = true;
+    });
+
+    final success = await _bleService.sendPaymentRequest(
+      senderName: 'Current User',
+      senderPhone: '+1234567890',
+      receiverName: widget.receiverName,
+      receiverPhone: widget.receiverPhone,
+      amount: widget.amount,
+      description: widget.description,
+    );
+
+    if (!success && mounted) {
+      setState(() {
+        _isWaitingResponse = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-
+    
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: const Text('Offline Payment'),
+        title: const Text('Send Payment'),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
-        foregroundColor: colorScheme.onSurface,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _isScanning || _isConnecting ? null : _startScan,
-            tooltip: 'Rescan Devices',
-          ),
+          if (!_bleService.isScanning && !_bleService.isConnected)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _startScan,
+              tooltip: 'Scan for devices',
+            ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20.0),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    colorScheme.primary,
-                    colorScheme.primary.withOpacity(0.8),
-                  ],
-                ),
-              ),
-              child: Row(
-                children: [
-                  RotationTransition(
-                    turns: _isScanning ? _animationController! : const AlwaysStoppedAnimation(0),
-                    child: Icon(
-                      Icons.bluetooth,
-                      size: 32,
-                      color: colorScheme.onPrimary,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'OffPay',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.onPrimary,
-                          ),
-                        ),
-                        Text(
-                          'Secure Offline P2P Payment',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: colorScheme.onPrimary.withOpacity(0.9),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+      body: Column(
+        children: [
+          // Payment Details Card
+          Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  colorScheme.primary,
+                  colorScheme.primary.withOpacity(0.8),
                 ],
               ),
-            ),
-            const SizedBox(height: 24),
-            Card(
-              elevation: 6,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.payment, color: colorScheme.primary, size: 28),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Payment Details',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.onSurface,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    _buildDetailRow('To:', widget.receiverName),
-                    _buildDetailRow('Phone:', widget.receiverPhone),
-                    _buildDetailRow('Amount:', '₹${widget.amount.toStringAsFixed(2)}'),
-                    if (widget.description?.isNotEmpty == true)
-                      _buildDetailRow('Description:', widget.description!),
-                  ],
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.primary.withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
-              ),
+              ],
             ),
-            const SizedBox(height: 24),
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    RotationTransition(
-                      turns: _isScanning || _isConnecting ? _animationController! : const AlwaysStoppedAnimation(0),
-                      child: Icon(
-                        _isPaired ? Icons.bluetooth_connected : Icons.bluetooth_searching,
-                        size: 36,
-                        color: _isPaired ? Colors.green : colorScheme.primary,
-                      ),
+                    Icon(
+                      Icons.payment,
+                      color: colorScheme.onPrimary,
+                      size: 28,
                     ),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _connectionStatus,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: colorScheme.onSurface.withOpacity(0.8),
-                          fontWeight: FontWeight.w500,
-                        ),
+                    Text(
+                      'Payment Details',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onPrimary,
                       ),
                     ),
-                    if (_isPaired)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'PAIRED',
-                          style: TextStyle(
-                            color: Colors.green,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 16),
+                _buildDetailRow('To:', widget.receiverName, colorScheme.onPrimary),
+                _buildDetailRow('Phone:', widget.receiverPhone, colorScheme.onPrimary),
+                _buildDetailRow('Amount:', '₹${widget.amount.toStringAsFixed(2)}', colorScheme.onPrimary),
+                if (widget.description?.isNotEmpty == true)
+                  _buildDetailRow('Description:', widget.description!, colorScheme.onPrimary),
+              ],
             ),
-            const SizedBox(height: 24),
-            Expanded(
-              child: _isPaired ? _buildConnectedView() : _buildDeviceList(),
+          ),
+
+          // Connection Status
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceVariant,
+              borderRadius: BorderRadius.circular(12),
             ),
-          ],
-        ),
+            child: Row(
+              children: [
+                AnimatedBuilder(
+                  animation: _pulseAnimation,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: _bleService.isScanning ? _pulseAnimation.value : 1.0,
+                      child: Icon(
+                        _getStatusIcon(),
+                        color: _getStatusColor(),
+                        size: 24,
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _connectionStatus,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                if (_bleService.isConnected)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'CONNECTED',
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Device List or Connected View
+          Expanded(
+            child: _bleService.isConnected && _selectedDevice != null
+                ? _buildConnectedView()
+                : _buildDeviceList(),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildDetailRow(String label, String value, Color textColor) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 90,
+            width: 80,
             child: Text(
               label,
               style: TextStyle(
                 fontWeight: FontWeight.w500,
-                fontSize: 16,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                color: textColor.withOpacity(0.8),
               ),
             ),
           ),
@@ -435,8 +370,7 @@ class _BluetoothSenderScreenState extends State<BluetoothSenderScreen> with Sing
               value,
               style: TextStyle(
                 fontWeight: FontWeight.w600,
-                fontSize: 16,
-                color: Theme.of(context).colorScheme.onSurface,
+                color: textColor,
               ),
             ),
           ),
@@ -445,21 +379,42 @@ class _BluetoothSenderScreenState extends State<BluetoothSenderScreen> with Sing
     );
   }
 
+  IconData _getStatusIcon() {
+    if (_bleService.isConnected) return Icons.bluetooth_connected;
+    if (_bleService.isScanning) return Icons.bluetooth_searching;
+    return Icons.bluetooth;
+  }
+
+  Color _getStatusColor() {
+    if (_bleService.isConnected) return Colors.green;
+    if (_bleService.isScanning) return Colors.blue;
+    return Colors.grey;
+  }
+
   Widget _buildConnectedView() {
-    return Column(
-      children: [
-        Card(
-          elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              children: [
-                ScaleTransition(
-                  scale: Tween(begin: 0.8, end: 1.0).animate(
-                    CurvedAnimation(parent: _animationController!, curve: Curves.easeInOut),
-                  ),
-                  child: Container(
+    return Container(
+      margin: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Card(
+            elevation: 8,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.green.withOpacity(0.1),
+                    Colors.green.withOpacity(0.05),
+                  ],
+                ),
+              ),
+              child: Column(
+                children: [
+                  Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.green.withOpacity(0.1),
@@ -471,95 +426,110 @@ class _BluetoothSenderScreenState extends State<BluetoothSenderScreen> with Sing
                       color: Colors.green,
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Paired with ${_getDeviceName(_selectedDevice!)}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                  const SizedBox(height: 16),
+                  Text(
+                    'Connected to',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Payment sent. Verify to confirm.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  const SizedBox(height: 4),
+                  Text(
+                    _selectedDevice!.displayName,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-        const Spacer(),
-        SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: ElevatedButton(
-            onPressed: _isPaired && !_isWaitingResponse ? _verifyAndProceed : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 4,
-            ),
-            child: _isWaitingResponse
-                ? Row(
+                  const SizedBox(height: 8),
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
+                      Icon(
+                        _selectedDevice!.signalIcon,
+                        size: 16,
+                        color: Colors.grey[600],
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 4),
                       Text(
-                        'Verifying...',
+                        _selectedDevice!.signalStrength,
                         style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onPrimary,
+                          fontSize: 12,
+                          color: Colors.grey[600],
                         ),
                       ),
                     ],
-                  )
-                : const Text(
-                    'Verify',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ],
+          const Spacer(),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              onPressed: _isWaitingResponse ? null : _sendPayment,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 4,
+              ),
+              child: _isWaitingResponse
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Sending Payment...',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                        ),
+                      ],
+                    )
+                  : const Text(
+                      'Send Payment',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildDeviceList() {
     return Column(
       children: [
-        SizedBox(
+        // Scan Button
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: _isScanning || _isConnecting ? null : _startScan,
-            icon: _isScanning
-                ? SizedBox(
+            onPressed: _bleService.isScanning ? null : _startScan,
+            icon: _bleService.isScanning
+                ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.search),
             label: Text(
-              _isScanning ? 'Scanning...' : 'Scan for Devices',
+              _bleService.isScanning ? 'Scanning...' : 'Scan for Devices',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             style: ElevatedButton.styleFrom(
@@ -569,141 +539,156 @@ class _BluetoothSenderScreenState extends State<BluetoothSenderScreen> with Sing
             ),
           ),
         ),
-        const SizedBox(height: 20),
-        if (_discoveredDevices.any((device) => _getDeviceName(device) == _defaultDeviceName))
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.blue.withOpacity(0.3)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, color: Colors.blue, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Demo device available for testing',
-                    style: TextStyle(
-                      color: Colors.blue.shade700,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+
         const SizedBox(height: 16),
+
+        // Device List
         Expanded(
           child: _discoveredDevices.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      RotationTransition(
-                        turns: _isScanning
-                            ? _animationController!
-                            : const AlwaysStoppedAnimation(0),
-                        child: Icon(
-                          Icons.bluetooth_searching,
-                          size: 64,
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _isScanning ? 'Scanning for devices...' : 'No devices found',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                        ),
-                      ),
-                      if (!_isScanning) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Simulated devices available for web testing',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ],
-                  ),
-                )
+              ? _buildEmptyState()
               : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: _discoveredDevices.length,
                   itemBuilder: (context, index) {
                     final device = _discoveredDevices[index];
-                    final isConnecting = _isConnecting && _selectedDevice?.id == device.id;
-                    final isDemoDevice = _getDeviceName(device) == _defaultDeviceName;
-
+                    final isDemo = device.name.contains('OffPay');
+                    
                     return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      elevation: _selectedDevice?.id == device.id ? 4 : 2,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      elevation: 2,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: _selectedDevice?.id == device.id
-                            ? BorderSide(color: Theme.of(context).colorScheme.primary, width: 1)
-                            : BorderSide.none,
                       ),
                       child: ListTile(
+                        contentPadding: const EdgeInsets.all(16),
                         leading: Container(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: isDemoDevice
+                            color: isDemo
                                 ? Colors.blue.withOpacity(0.1)
                                 : Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
-                            isDemoDevice ? Icons.smartphone : Icons.bluetooth,
-                            color: isDemoDevice
+                            isDemo ? Icons.smartphone : Icons.bluetooth,
+                            color: isDemo
                                 ? Colors.blue
                                 : Theme.of(context).colorScheme.primary,
+                            size: 24,
                           ),
                         ),
                         title: Text(
-                          _getDeviceName(device),
-                          style: TextStyle(
+                          device.displayName,
+                          style: const TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: _selectedDevice?.id == device.id
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.onSurface,
+                            fontSize: 16,
                           ),
                         ),
-                        subtitle: Text(
-                          isDemoDevice ? 'Demo Device - Tap to pair' : 'Tap to pair and send payment',
-                          style: TextStyle(
-                            color: isDemoDevice ? Colors.blue.shade600 : Colors.grey.shade600,
-                            fontSize: 12,
-                          ),
-                        ),
-                        trailing: isConnecting
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Icon(
-                                _selectedDevice?.id == device.id && _isPaired
-                                    ? Icons.check_circle
-                                    : Icons.arrow_forward_ios,
-                                size: 16,
-                                color: _selectedDevice?.id == device.id && _isPaired
-                                    ? Colors.green
-                                    : Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  device.signalIcon,
+                                  size: 14,
+                                  color: Colors.grey[600],
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  device.signalStrength,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                const Spacer(),
+                                if (isDemo)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      'DEMO',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              device.isConnectable ? 'Tap to connect' : 'Not available',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: device.isConnectable ? Colors.green : Colors.red,
                               ),
-                        onTap: (isConnecting || _isPaired) ? null : () => _connectToDevice(device),
+                            ),
+                          ],
+                        ),
+                        trailing: Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: device.isConnectable 
+                              ? Theme.of(context).colorScheme.primary 
+                              : Colors.grey,
+                        ),
+                        onTap: device.isConnectable ? () => _connectToDevice(device) : null,
                       ),
                     );
                   },
                 ),
         ),
       ],
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedBuilder(
+            animation: _pulseAnimation,
+            builder: (context, child) {
+              return Transform.scale(
+                scale: _bleService.isScanning ? _pulseAnimation.value : 1.0,
+                child: Icon(
+                  Icons.bluetooth_searching,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _bleService.isScanning ? 'Scanning for devices...' : 'No devices found',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _bleService.isScanning 
+                ? 'Please wait while we search for nearby devices'
+                : 'Tap "Scan for Devices" to find nearby payment-enabled devices',
+            style: TextStyle(
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 }
